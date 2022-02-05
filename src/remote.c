@@ -1843,6 +1843,7 @@ static int update_one_tip(
 
 done:
 	git_reference_free(ref);
+	git_str_dispose(&refname);
 	return error;
 }
 
