@@ -2109,6 +2109,17 @@ int git_remote_disconnect(git_remote *remote)
 	return 0;
 }
 
+static void free_heads(git_vector *heads)
+{
+	git_remote_head *head;
+	size_t i;
+
+	git_vector_foreach(heads, i, head) {
+		git__free(head->name);
+		git__free(head);
+	}
+}
+
 void git_remote_free(git_remote *remote)
 {
 	if (remote == NULL)
@@ -2131,6 +2142,9 @@ void git_remote_free(git_remote *remote)
 
 	free_refspecs(&remote->passive_refspecs);
 	git_vector_free(&remote->passive_refspecs);
+
+	free_heads(&remote->local_heads);
+	git_vector_free(&remote->local_heads);
 
 	git_push_free(remote->push);
 	git__free(remote->url);
