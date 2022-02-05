@@ -19,7 +19,7 @@
 #include "repository.h"
 #include "refs.h"
 
-static int maybe_want(git_remote *remote, git_remote_head *head, git_odb *odb, git_refspec *tagspec, git_remote_autotag_option_t tagopt)
+static int maybe_want(git_remote *remote, git_remote_head *head, git_refspec *tagspec, git_remote_autotag_option_t tagopt)
 {
 	int match = 0, valid;
 
@@ -44,20 +44,53 @@ static int maybe_want(git_remote *remote, git_remote_head *head, git_odb *odb, g
 	if (!match)
 		return 0;
 
-	/* If we have the object, mark it so we don't ask for it */
-	if (git_odb_exists(odb, &head->oid)) {
-		head->local = 1;
-	}
-	else
-		remote->need_pack = 1;
-
 	return git_vector_insert(&remote->refs, head);
+}
+
+static int mark_local(git_remote *remote)
+{
+	git_remote_head *head;
+	git_odb *odb;
+	size_t i;
+
+	if (git_repository_odb__weakptr(&odb, remote->repo) < 0)
+		return -1;
+
+	git_vector_foreach(&remote->refs, i, head) {
+		/* If we have the object, mark it so we don't ask for it */
+		if (git_odb_exists(odb, &head->oid))
+			head->local = 1;
+		else
+			remote->need_pack = 1;
+	}
+
+	return 0;
+}
+
+static int maybe_want_oid(git_remote *remote, git_refspec *spec)
+{
+	git_remote_head *oid_head;
+
+	if (!git_oid__is_hexstr(spec->src))
+		return 0;
+
+	oid_head = git__calloc(1, sizeof(git_remote_head));
+	GIT_ERROR_CHECK_ALLOC(oid_head);
+
+	git_oid_fromstr(&oid_head->oid, spec->src);
+	oid_head->name = git__strdup(spec->dst);
+	GIT_ERROR_CHECK_ALLOC(oid_head->name);
+
+	if (git_vector_insert(&remote->refs, oid_head) < 0)
+		return -1;
+
+	return 0;
 }
 
 static int filter_wants(git_remote *remote, const git_fetch_options *opts)
 {
 	git_remote_head **heads;
-	git_refspec tagspec, head;
+	git_refspec tagspec, head, *spec;
 	int error = 0;
 	git_odb *odb;
 	size_t i, heads_len;
@@ -93,10 +126,21 @@ static int filter_wants(git_remote *remote, const git_fetch_options *opts)
 	if ((error = git_remote_ls((const git_remote_head ***)&heads, &heads_len, remote)) < 0)
 		goto cleanup;
 
+	/* Handle remote heads */
 	for (i = 0; i < heads_len; i++) {
-		if ((error = maybe_want(remote, heads[i], odb, &tagspec, tagopt)) < 0)
-			break;
+		if ((error = maybe_want(remote, heads[i], &tagspec, tagopt)) < 0)
+			goto cleanup;
 	}
+
+	/* Handle explicitly specified OID specs */
+	if (true) {
+		git_vector_foreach(&remote->active_refspecs, i, spec) {
+			if ((error = maybe_want_oid(remote, spec)) < 0)
+				goto cleanup;
+		}
+	}
+
+	error = mark_local(remote);
 
 cleanup:
 	git_refspec__dispose(&tagspec);
