@@ -1432,7 +1432,8 @@ static int check_repositoryformatversion(int *version, git_config *config)
 }
 
 static const char *builtin_extensions[] = {
-	"noop"
+	"noop",
+	"worktreeconfig",
 };
 
 static git_vector user_extensions = GIT_VECTOR_INIT;
