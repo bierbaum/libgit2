@@ -34,7 +34,7 @@ void test_core_opts__extensions_query(void)
 
 	cl_git_pass(git_libgit2_opts(GIT_OPT_GET_EXTENSIONS, &out));
 
-	cl_assert_equal_sz(out.count, 1);
+	cl_assert(out.count > 0);
 	cl_assert_equal_s("noop", out.strings[0]);
 
 	git_strarray_dispose(&out);
@@ -43,29 +43,51 @@ void test_core_opts__extensions_query(void)
 void test_core_opts__extensions_add(void)
 {
 	const char *in[] = { "foo" };
-	git_strarray out = { 0 };
+	git_strarray out_before = { 0 };
+	git_strarray out_after = { 0 };
+	size_t idx = 0;
 
+	cl_git_pass(git_libgit2_opts(GIT_OPT_GET_EXTENSIONS, &out_before));
 	cl_git_pass(git_libgit2_opts(GIT_OPT_SET_EXTENSIONS, in, ARRAY_SIZE(in)));
-	cl_git_pass(git_libgit2_opts(GIT_OPT_GET_EXTENSIONS, &out));
+	cl_git_pass(git_libgit2_opts(GIT_OPT_GET_EXTENSIONS, &out_after));
 
-	cl_assert_equal_sz(out.count, 2);
-	cl_assert_equal_s("noop", out.strings[0]);
-	cl_assert_equal_s("foo", out.strings[1]);
+	cl_assert_equal_sz(out_after.count, out_before.count + 1);
 
-	git_strarray_dispose(&out);
+	for(idx = 0; idx < out_before.count; idx++) {
+	  cl_assert_equal_s(out_before.strings[idx], out_after.strings[idx]);
+	}
+
+	cl_assert_equal_s("foo", out_after.strings[out_after.count - 1]);
+
+	git_strarray_dispose(&out_before);
+	git_strarray_dispose(&out_after);
 }
 
 void test_core_opts__extensions_remove(void)
 {
 	const char *in[] = { "bar", "!negate", "!noop", "baz" };
-	git_strarray out = { 0 };
+	git_strarray out_before = { 0 };
+	git_strarray out_after = { 0 };
+	size_t idx = 0;
 
+	bool found_bar = false;
+	bool found_baz = false;
+
+	cl_git_pass(git_libgit2_opts(GIT_OPT_GET_EXTENSIONS, &out_before));
 	cl_git_pass(git_libgit2_opts(GIT_OPT_SET_EXTENSIONS, in, ARRAY_SIZE(in)));
-	cl_git_pass(git_libgit2_opts(GIT_OPT_GET_EXTENSIONS, &out));
+	cl_git_pass(git_libgit2_opts(GIT_OPT_GET_EXTENSIONS, &out_after));
 
-	cl_assert_equal_sz(out.count, 2);
-	cl_assert_equal_s("bar", out.strings[0]);
-	cl_assert_equal_s("baz", out.strings[1]);
 
-	git_strarray_dispose(&out);
+	for(idx = 0; idx < out_after.count; idx++) {
+	  found_bar = found_bar || !strcmp(out_after.strings[idx], "bar");
+	  found_baz = found_baz || !strcmp(out_after.strings[idx], "baz");
+	  cl_assert(strcmp(out_after.strings[idx], "negate"));
+	  cl_assert(strcmp(out_after.strings[idx], "noop"));
+	}
+
+	cl_assert(found_bar);
+	cl_assert(found_baz);
+
+	git_strarray_dispose(&out_before);
+	git_strarray_dispose(&out_after);
 }
