@@ -594,6 +594,7 @@ static int get_backend_for_use(git_config_backend **out,
 {
 	size_t i;
 	backend_internal *backend;
+	git_config_entry *entry;
 
 	*out = NULL;
 
@@ -606,8 +607,19 @@ static int get_backend_for_use(git_config_backend **out,
 
 	git_vector_foreach(&cfg->backends, i, backend) {
 		if (!backend->backend->readonly) {
-			*out = backend->backend;
-			return 0;
+			switch (use) {
+			case BACKEND_USE_SET:
+				*out = backend->backend;
+				return 0;
+			case BACKEND_USE_DELETE:
+				/* return the first backend that contains the given config-name */
+				backend->backend->get(backend->backend, name, &entry);
+				if (entry != NULL) {
+					*out = backend->backend;
+					return 0;
+				}
+				break;
+			}
 		}
 	}
 
